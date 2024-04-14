@@ -8,8 +8,19 @@ from feedparser import FeedParserDict
 from newspaper import Article, NewsPool
 from newspaper.configuration import Configuration as NewsDownloadConfig
 import traceback
-# Define the function to be scheduled
+
 dotenv.load_dotenv()
+
+
+def time_guard(func):
+    def wrapper(*args, **kwargs):
+        start_time = time.time()
+        result = func(*args, **kwargs)
+        end_time = time.time()
+        elapsed_time = end_time - start_time
+        print(f"{func.__name__} took {elapsed_time:.3f} seconds")
+        return result
+    return wrapper
 
 
 class News:
@@ -36,6 +47,7 @@ class SpreadSheet:
                         news.publishDate, news.link])
         self.sheets.sheet1.append_rows(rows)
 
+    @time_guard
     def fetch_all_guid(self) -> list[str]:
         return self.fetch_colume_values('guid')
 
