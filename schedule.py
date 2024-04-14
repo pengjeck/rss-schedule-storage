@@ -96,11 +96,13 @@ def update_feed(feed: FeedParserDict):
         if item.link not in articles:
             print("Fail to download artical from url=", item.link)
             continue
+        target_article: Article = articles[item.link]
+        target_article.parse()
 
         news = News()
         news.guid = item.id
         news.title = item.title
-        news.content = articles[item.link].text
+        news.content = target_article.text
         news.describe = item.summary
         news.link = item.link
         news.publishDate = time.strftime("%Y%m%d", item.published_parsed)
