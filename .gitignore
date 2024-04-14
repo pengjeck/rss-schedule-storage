@@ -2,3 +2,5 @@ venv
 .vscode
 
 gs_service_account.json
+
+.env
