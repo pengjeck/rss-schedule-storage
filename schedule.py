@@ -1,9 +1,11 @@
 import os
 import dotenv
 from apscheduler.schedulers.blocking import BlockingScheduler
-from .storage_task import StorageRSS
+from rss_storage import StorageNews
 
 dotenv.load_dotenv()
+
+storage = StorageNews("gs_service_account.json", os.getenv("SHEET_KEY"))
 
 
 def task():
@@ -12,9 +14,8 @@ def task():
         url = f.readline().strip()
         if len(url) > 4:
             urls.append(url)
-    storage = StorageRSS(urls, "gs_service_account.json",
-                         os.getenv("SHEET_KEY"))
-    storage.storage_to_google_spreadsheet()
+    print("feed urls=", urls)
+    storage.storage_to_google_spreadsheet(urls)
 
 
 # Create an instance of scheduler

@@ -5,6 +5,7 @@ from feedparser import FeedParserDict
 from newspaper import Article, NewsPool
 from newspaper.configuration import Configuration as NewsDownloadConfig
 import traceback
+import requests
 
 
 def time_guard(func):
@@ -19,12 +20,17 @@ def time_guard(func):
 
 
 class News:
-    guid: str
-    title: str
-    describe: str
-    content: str
-    publishDate: str
-    link: str
+    def __init__(self, feed_entry: FeedParserDict, article: Article):
+        self.guid = feed_entry.id
+        self.title = feed_entry.title
+        self.describe = feed_entry.summary
+        self.content = article.text
+        self.link = feed_entry.link
+        self.publishDate = time.strftime("%Y%m%d", feed_entry.published_parsed)
+
+    @staticmethod
+    def create_from_feed_entry(feed_entry: FeedParserDict, article: Article):
+        return News(feed_entry, article)
 
 
 class SpreadSheet:
@@ -53,9 +59,9 @@ class SpreadSheet:
 
     @time_guard
     def fetch_all_guid(self) -> list[str]:
-        return self.fetch_colume_values('guid')
+        return self.fetch_column_values('guid')
 
-    def fetch_colume_values(self, column="guid"):
+    def fetch_column_values(self, column="guid"):
         if column not in self.COLUMN_MAP:
             raise KeyError("Columen=" + column + "is not exist.")
         searched = self.sheets.sheet1.col_values(self.COLUMN_MAP[column])
@@ -67,18 +73,23 @@ class SpreadSheet:
         return output
 
 
-class StorageRSS:
-    def __init__(self, feed_urls=[], google_service_account_file="", sheet_key="") -> None:
-        self.feed_urls = feed_urls
+class StorageNews:
+    def __init__(self, google_service_account_file="", sheet_key="",
+                 language='en',
+                 request_timeout=7,
+                 download_thread_num=10) -> None:
+        self.language = language
+        self.request_timeout = request_timeout
+        self.download_thread_num = download_thread_num
         self.ss = SpreadSheet(google_service_account_file, sheet_key)
 
     def download_batch_article(self, urls: list[str]) -> dict[str, Article]:
         news_conf = NewsDownloadConfig()
         news_conf.memoize_articles = False
         news_conf.fetch_images = False
-        news_conf.language = 'en'
-        news_conf.request_timeout = 7
-        news_conf.number_threads = 10
+        news_conf.language = self.language
+        news_conf.request_timeout = self.request_timeout
+        news_conf.number_threads = self.download_thread_num
 
         pool = NewsPool(news_conf)
         articles = [Article(url) for url in urls]
@@ -95,9 +106,11 @@ class StorageRSS:
         not_exist_guids = self.filter_exist_article(feed)
         filter_feed_entries = [
             item for item in feed.entries if item.id in not_exist_guids]
-
+        print(len(filter_feed_entries), " article of feed",
+              feed.url, " need to storage in feed")
         urls = [item.link for item in filter_feed_entries]
         articles = self.download_batch_article(urls)
+        print(len(articles), " articel of feed", feed.url, " downloaded.")
         news_list = []
         for item in filter_feed_entries:
             if item.link not in articles:
@@ -106,23 +119,21 @@ class StorageRSS:
             target_article: Article = articles[item.link]
             target_article.parse()
 
-            news = News()
-            news.guid = item.id
-            news.title = item.title
-            news.content = target_article.text
-            news.describe = item.summary
-            news.link = item.link
-            news.publishDate = time.strftime("%Y%m%d", item.published_parsed)
+            news = News.create_from_feed_entry(item, target_article)
             news_list.append(news)
         self.ss.batch_append(news_list)
 
-    def storage_to_google_spreadsheet(self):
-        for url in self.feed_urls:
+    def storage_to_google_spreadsheet(self, feed_urls: list[str]):
+        for url in feed_urls:
             try:
-                feed = feedparser.parse(url)
-                print("parsed feed=", url, " contain ",
-                      len(feed.entries), "entries")
-                self.update_feed(feed)
+                response = requests.get(url, timeout=self.request_timeout)
+                if response.status_code == 200:
+                    feed = feedparser.parse(response.content)
+                    print("parsed feed=", url, " contain ",
+                          len(feed.entries), "entries")
+                    self.update_feed(feed)
+                else:
+                    print("Failed to fetch the feed=", url)
             except Exception as e:
                 print("meet error when update feed=",
                       url, " of google spreadsheet. error=", e)
