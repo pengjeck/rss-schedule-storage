@@ -107,10 +107,11 @@ class StorageNews:
         filter_feed_entries = [
             item for item in feed.entries if item.id in not_exist_guids]
         print(len(filter_feed_entries), " article of feed",
-              feed.url, " need to storage in feed")
+              feed.feed.link, " need to storage in feed")
         urls = [item.link for item in filter_feed_entries]
         articles = self.download_batch_article(urls)
-        print(len(articles), " articel of feed", feed.url, " downloaded.")
+        print(len(articles), " articel of feed",
+              feed.feed.link, " downloaded.")
         news_list = []
         for item in filter_feed_entries:
             if item.link not in articles:
