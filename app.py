@@ -2,7 +2,7 @@ import os
 import dotenv
 from flask import Flask
 from apscheduler.schedulers.background import BackgroundScheduler
-from rss_storage import StorageNews
+from src.rss_storage import StorageNews
 import logging
 
 logging.basicConfig(level=logging.INFO,
