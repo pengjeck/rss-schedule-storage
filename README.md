@@ -32,5 +32,7 @@ Contributions to the RSS Schedule Storage project are welcome. Please feel free 
 If you encounter any issues or require assistance, please open an issue on the GitHub repository.
 
 ---
+## Acknowledgements
 Happy Coding!
+
 > Part of the code is generate by [gpt4](https://chat.openai.com/)
