@@ -15,12 +15,23 @@ storage = StorageNews("gs_service_account.json", os.getenv("SHEET_KEY"))
 logging.info("end to connect google spread sheet")
 
 
-def task():
+def read_urls():
     urls = []
     with open("feeds.txt") as f:
-        url = f.readline().strip()
-        if len(url) > 4:
-            urls.append(url)
+        while True:
+            line = f.readline()
+            if line == "":
+                break
+
+            url = line.strip()
+            if len(url) > 4:
+                urls.append(url)
+
+    return urls
+
+
+def task():
+    urls = read_urls()
     logging.info("feed urls=%s", ','.join(urls))
     storage.storage_to_google_spreadsheet(urls)
 

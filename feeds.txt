@@ -1,5 +1,4 @@
-https://www.aljazeera.com/xml/rss/all.xml
-https://feeds.bbci.co.uk/news/world/rss.xml​
+https://feeds.bbci.co.uk/news/world/rss.xml
 https://feeds.npr.org/1001/rss.xml
 https://feeds.npr.org/1003/rss.xml
 https://feeds.npr.org/1024/rss.xml
@@ -19,3 +18,4 @@ https://feeds.skynews.com/feeds/rss/technology.xml
 https://www.independent.co.uk/news/rss
 https://www.newyorker.com/feed/news
 https://feeds.washingtonpost.com/rss/world
+https://www.aljazeera.com/xml/rss/all.xml
