@@ -6,3 +6,5 @@ gs_service_account.json
 .env
 
 __pycache__/
+
+feeds\ copy.txt

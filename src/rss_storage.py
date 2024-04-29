@@ -6,6 +6,7 @@ from newspaper import Article, NewsPool
 from newspaper.configuration import Configuration as NewsDownloadConfig
 import traceback
 import requests
+import logging
 
 
 def time_guard(func):
@@ -14,7 +15,7 @@ def time_guard(func):
         result = func(*args, **kwargs)
         end_time = time.time()
         elapsed_time = end_time - start_time
-        print(f"{func.__name__} took {elapsed_time:.3f} seconds")
+        logging.info(f"{func.__name__} took {elapsed_time:.3f} seconds")
         return result
     return wrapper
 
@@ -99,23 +100,23 @@ class StorageNews:
 
     def filter_exist_article(self, feed: FeedParserDict):
         guids = self.ss.fetch_all_guid()
-        print("guids count=", len(guids), " in google spreadsheet")
+        logging.info(f"guids count={len(guids)} in google spreadsheet")
         return [item.id for item in feed.entries if item.id not in guids]
 
     def update_feed(self, feed: FeedParserDict):
         not_exist_guids = self.filter_exist_article(feed)
         filter_feed_entries = [
             item for item in feed.entries if item.id in not_exist_guids]
-        print(len(filter_feed_entries), " article of feed",
-              feed.feed.link, " need to storage in feed")
+        logging.info(
+            f"{len(filter_feed_entries)}, article of feed={feed.feed.link} need to storage in feed.")
         urls = [item.link for item in filter_feed_entries]
         articles = self.download_batch_article(urls)
-        print(len(articles), " articel of feed",
-              feed.feed.link, " downloaded.")
+        logging.info(
+            f"{len(articles)}, articel of feed={feed.feed.link} download")
         news_list = []
         for item in filter_feed_entries:
             if item.link not in articles:
-                print("Fail to download artical from url=", item.link)
+                logging.info(f"Fail to download artical from url={item.link}")
                 continue
             target_article: Article = articles[item.link]
             target_article.parse()
@@ -130,12 +131,12 @@ class StorageNews:
                 response = requests.get(url, timeout=self.request_timeout)
                 if response.status_code == 200:
                     feed = feedparser.parse(response.content)
-                    print("parsed feed=", url, " contain ",
-                          len(feed.entries), "entries")
+                    logging.info(
+                        f"parsed feed={url} contain {len(feed.entries)} entries")
                     self.update_feed(feed)
                 else:
-                    print("Failed to fetch the feed=", url)
+                    logging.warning(f"Failed to fetch the feed={url}")
             except Exception as e:
-                print("meet error when update feed=",
-                      url, " of google spreadsheet. error=", e)
+                logging.warning(
+                    f"meet error when update feed={url} of google spreadsheet. error={e}")
                 traceback.print_exc()

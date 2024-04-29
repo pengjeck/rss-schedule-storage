@@ -45,7 +45,7 @@ def health():
 
 scheduler = BackgroundScheduler()
 interval = int(os.getenv("INTERVAL_SECONDS"))
-logging.info("schedula interval=%d", interval)
+logging.info(f"schedula interval={interval}")
 scheduler.add_job(task, 'interval', seconds=interval)
 scheduler.start()
 
