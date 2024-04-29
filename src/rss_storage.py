@@ -1,5 +1,6 @@
 import time
 import gspread
+from gspread import Spreadsheet
 import feedparser
 from feedparser import FeedParserDict
 from newspaper import Article, NewsPool
@@ -7,6 +8,9 @@ from newspaper.configuration import Configuration as NewsDownloadConfig
 import traceback
 import requests
 import logging
+from datetime import date
+import calendar
+from .filters import DateFilter, ExistFilter, Filter
 
 
 def time_guard(func):
@@ -34,10 +38,25 @@ class News:
         return News(feed_entry, article)
 
 
-class SpreadSheet:
-    gs = None
-    sheets = None
+def get_worksheet_name_by_date(target_date: date):
+    return target_date.strftime("%Y%m%d")
 
+
+def create_mouth_sheet(gs_client, month: date, prefix: str = "") -> Spreadsheet:
+    _, month_days = calendar.monthrange(month.year, month.month)
+    ss_name = prefix + month.strftime("%Y%m")
+
+    ss: Spreadsheet = gs_client.create(ss_name)
+    for i in range(month_days):
+        the_day = date(month.year, month.month, i + 1)
+        ws = ss.add_worksheet(
+            get_worksheet_name_by_date(the_day), rows=1, cols=20)
+        logging.info(f"Add workshet={ws} to ss={ss.url} of day={the_day}")
+
+    return ss
+
+
+class DateSpreadSheet:
     COLUMN_MAP = {
         "guid": 1,
         "title": 2,
@@ -47,25 +66,35 @@ class SpreadSheet:
         "link": 6
     }
 
-    def __init__(self, service_account_file: str, file_key: str) -> None:
-        self.gs = gspread.service_account(filename=service_account_file)
-        self.sheets = self.gs.open_by_key(file_key)
+    def __init__(self, ss: Spreadsheet) -> None:
+        self.ss: Spreadsheet = ss
 
-    def batch_append(self, news_list: list[News]):
+    def batch_append(self, news_list: list[News], target_date: date):
         rows = []
+        ws_name = get_worksheet_name_by_date(target_date)
         for news in news_list:
+            if news.publishDate != ws_name:
+                logging.warning(
+                    f"News publish date is not same with sheet name. news={news}")
+                continue
+
             rows.append([news.guid, news.title, news.describe, news.content,
                         news.publishDate, news.link])
-        self.sheets.sheet1.append_rows(rows)
+        self.ss.worksheet(ws_name).append_rows(rows)
+        logging.info(
+            f"append {len(rows)}news to worksheet={ws_name} of sheet={self.ss.title}")
 
     @time_guard
-    def fetch_all_guid(self) -> list[str]:
-        return self.fetch_column_values('guid')
+    def fetch_all_guid_by_day(self, target_date: date) -> set[str]:
+        ws_name = get_worksheet_name_by_date(target_date)
+        guids = self.fetch_column_values('guid', ws_name)
+        return set(guids)
 
-    def fetch_column_values(self, column="guid"):
+    def fetch_column_values(self, column: str, ws_name: str):
         if column not in self.COLUMN_MAP:
             raise KeyError("Columen=" + column + "is not exist.")
-        searched = self.sheets.sheet1.col_values(self.COLUMN_MAP[column])
+        searched = self.ss.worksheet(
+            ws_name).col_values(self.COLUMN_MAP[column])
         output = []
         for item in searched:
             if not item:
@@ -75,15 +104,22 @@ class SpreadSheet:
 
 
 class StorageNews:
-    def __init__(self, google_service_account_file="", sheet_key="",
+    def __init__(self, ss: Spreadsheet,
+                 target_date: date,
                  language='en',
                  request_timeout=7,
                  download_thread_num=10) -> None:
         self.language = language
+        self.target_date = target_date
         self.request_timeout = request_timeout
         self.download_thread_num = download_thread_num
-        self.ss = SpreadSheet(google_service_account_file, sheet_key)
+        self.ss = DateSpreadSheet(ss)
 
+        self.exist_filter = ExistFilter([])
+        self.filter_chain: list[Filter] = [DateFilter(
+            target_date), self.exist_filter]
+
+    @time_guard
     def download_batch_article(self, urls: list[str]) -> dict[str, Article]:
         news_conf = NewsDownloadConfig()
         news_conf.memoize_articles = False
@@ -98,21 +134,22 @@ class StorageNews:
         pool.join()
         return {article.url: article for article in articles}
 
-    def filter_exist_article(self, feed: FeedParserDict):
-        guids = self.ss.fetch_all_guid()
-        logging.info(f"guids count={len(guids)} in google spreadsheet")
-        return [item.id for item in feed.entries if item.id not in guids]
+    def exe_filter(self, entry):
+        for filter in self.filter_chain:
+            if not filter.filter(entry):
+                return False
+        return True
 
     def update_feed(self, feed: FeedParserDict):
-        not_exist_guids = self.filter_exist_article(feed)
         filter_feed_entries = [
-            item for item in feed.entries if item.id in not_exist_guids]
+            item for item in feed.entries if self.exe_filter(item)]
         logging.info(
             f"{len(filter_feed_entries)}, article of feed={feed.feed.link} need to storage in feed.")
         urls = [item.link for item in filter_feed_entries]
+
         articles = self.download_batch_article(urls)
         logging.info(
-            f"{len(articles)}, articel of feed={feed.feed.link} download")
+            f"{len(articles)} articel of feed={feed.feed.link} had download")
         news_list = []
         for item in filter_feed_entries:
             if item.link not in articles:
@@ -123,7 +160,9 @@ class StorageNews:
 
             news = News.create_from_feed_entry(item, target_article)
             news_list.append(news)
-        self.ss.batch_append(news_list)
+        self.ss.batch_append(news_list, self.target_date)
+        self.exist_filter.update_exist_list(
+            self.ss.fetch_all_guid_by_day(self.target_date))
 
     def storage_to_google_spreadsheet(self, feed_urls: list[str]):
         for url in feed_urls:
