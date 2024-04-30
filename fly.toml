@@ -12,7 +12,8 @@ primary_region = 'lax'
 [env]
   PORT = '8080'
   INTERVAL_SECONDS="600"
-  SHEET_KEY="1hXNLUNliBQTwnbd2fMoF6qxCTWmHn2YFF6zRKSUYDuo"
+  INDEX_SHEET_URL="https://docs.google.com/spreadsheets/d/1JmoHh9nAdJRz_F9jnNDpydUk2NYSkw739Oahf0-270M"
+  RSS_FILE="feeds.txt"
 
 [http_service]
   internal_port = 8080
